@@ -54,12 +54,19 @@ public final class Dispatcher {
   private final Deque<RealCall> runningSyncCalls = new ArrayDeque<>();
 
   public Dispatcher(ExecutorService executorService) {
-    this.executorService = executorService;
+    this.executorService = executorService;    //可以自定义线程池
   }
 
   public Dispatcher() {
   }
 
+  //corePoolSize = 0：线程执行完毕60秒后，不缓存复用任何线程
+  //maximumPoolSize = MAX_VALUE（包含核心线程）
+  //keepAliveTime = 60：线程缓存60秒
+  //threadFactory：创建一个命名线程
+  //workQueue：SynchronousQueue，无容量队列，提交失败立即新建线程执行请求
+  //注意：使用Array/LinkedBlockingQueue，当请求加入等待队列中且等待队列没有满时，必须等待核心线程有空闲线程才能执行。而使用SynchronousQueue
+  //等待队列无容量，立即创建线程执行不等待，从而达到最大的并发量！！
   public synchronized ExecutorService executorService() {
     if (executorService == null) {
       executorService = new ThreadPoolExecutor(0, Integer.MAX_VALUE, 60, TimeUnit.SECONDS,
@@ -127,11 +134,11 @@ public final class Dispatcher {
   }
 
   synchronized void enqueue(AsyncCall call) {
-    if (runningAsyncCalls.size() < maxRequests && runningCallsForHost(call) < maxRequestsPerHost) {
-      runningAsyncCalls.add(call);
+    if (runningAsyncCalls.size() < maxRequests && runningCallsForHost(call) < maxRequestsPerHost) {    //正在请求的数量有限制：64个 && 同一个域名请求数量有限制：5个
+      runningAsyncCalls.add(call);     //如果满足条件，则添加到运行队列，调用线程池执行异步任务
       executorService().execute(call);
     } else {
-      readyAsyncCalls.add(call);
+      readyAsyncCalls.add(call);    //如果不满足条件，则添加到等待队列
     }
   }
 
@@ -154,19 +161,19 @@ public final class Dispatcher {
   }
 
   private void promoteCalls() {
-    if (runningAsyncCalls.size() >= maxRequests) return; // Already running max capacity.
-    if (readyAsyncCalls.isEmpty()) return; // No ready calls to promote.
+    if (runningAsyncCalls.size() >= maxRequests) return; // Already running max capacity.    //正在执行的请求不能大于64
+    if (readyAsyncCalls.isEmpty()) return; // No ready calls to promote.    //等待队列存在等待的请求
 
     for (Iterator<AsyncCall> i = readyAsyncCalls.iterator(); i.hasNext(); ) {
       AsyncCall call = i.next();
 
-      if (runningCallsForHost(call) < maxRequestsPerHost) {
+      if (runningCallsForHost(call) < maxRequestsPerHost) {    //遍历等待的请求，如果同一个host的请求<5个，则添加到运行队列
         i.remove();
         runningAsyncCalls.add(call);
         executorService().execute(call);
       }
 
-      if (runningAsyncCalls.size() >= maxRequests) return; // Reached max capacity.
+      if (runningAsyncCalls.size() >= maxRequests) return; // Reached max capacity.    //如果执行的请求，超过最大的64个，则返回不在添加运行Call
     }
   }
 
@@ -199,8 +206,8 @@ public final class Dispatcher {
     int runningCallsCount;
     Runnable idleCallback;
     synchronized (this) {
-      if (!calls.remove(call)) throw new AssertionError("Call wasn't in-flight!");
-      if (promoteCalls) promoteCalls();
+      if (!calls.remove(call)) throw new AssertionError("Call wasn't in-flight!");    //将执行完毕的call移除
+      if (promoteCalls) promoteCalls();    //将等待请求的call，流转到运行队列
       runningCallsCount = runningCallsCount();
       idleCallback = this.idleCallback;
     }
