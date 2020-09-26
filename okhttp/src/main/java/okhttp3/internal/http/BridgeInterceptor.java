@@ -37,6 +37,7 @@ import static okhttp3.internal.Util.hostHeader;
  * request. Then it proceeds to call the network. Finally it builds a user response from the network
  * response.
  */
+//链接应用程序代码和网络代码。首先，从一个用户请求构建一个网络请求，然后它调用网络。最后，它从网络响应构建一个用户响应。
 public final class BridgeInterceptor implements Interceptor {
   private final CookieJar cookieJar;
 
@@ -52,7 +53,7 @@ public final class BridgeInterceptor implements Interceptor {
     if (body != null) {
       MediaType contentType = body.contentType();
       if (contentType != null) {
-        requestBuilder.header("Content-Type", contentType.toString());
+        requestBuilder.header("Content-Type", contentType.toString());    //添加默认的请求头
       }
 
       long contentLength = body.contentLength();
@@ -90,15 +91,15 @@ public final class BridgeInterceptor implements Interceptor {
       requestBuilder.header("User-Agent", Version.userAgent());
     }
 
-    Response networkResponse = chain.proceed(requestBuilder.build());
+    Response networkResponse = chain.proceed(requestBuilder.build());    //调用下一个拦截器，并获取响应
 
-    HttpHeaders.receiveHeaders(cookieJar, userRequest.url(), networkResponse.headers());
+    HttpHeaders.receiveHeaders(cookieJar, userRequest.url(), networkResponse.headers());    //读取Cookie
 
     Response.Builder responseBuilder = networkResponse.newBuilder()
         .request(userRequest);
 
     if (transparentGzip
-        && "gzip".equalsIgnoreCase(networkResponse.header("Content-Encoding"))
+        && "gzip".equalsIgnoreCase(networkResponse.header("Content-Encoding"))    //如果是gzip编码
         && HttpHeaders.hasBody(networkResponse)) {
       GzipSource responseBody = new GzipSource(networkResponse.body().source());
       Headers strippedHeaders = networkResponse.headers().newBuilder()

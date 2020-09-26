@@ -232,7 +232,7 @@ public final class RealConnection extends Http2Connection.Listener implements Co
 
     rawSocket = proxy.type() == Proxy.Type.DIRECT || proxy.type() == Proxy.Type.HTTP
         ? address.socketFactory().createSocket()
-        : new Socket(proxy);
+        : new Socket(proxy);    //没有代理，则直接创建Socket对象；
 
     eventListener.connectStart(call, route.socketAddress(), proxy);
     rawSocket.setSoTimeout(readTimeout);
@@ -428,10 +428,10 @@ public final class RealConnection extends Http2Connection.Listener implements Co
     if (allocations.size() >= allocationLimit || noNewStreams) return false;
 
     // If the non-host fields of the address don't overlap, we're done.
-    if (!Internal.instance.equalsNonHost(this.route.address(), address)) return false;
+    if (!Internal.instance.equalsNonHost(this.route.address(), address)) return false;    //address一致
 
     // If the host exactly matches, we're done: this connection can carry the address.
-    if (address.url().host().equals(this.route().address().url().host())) {
+    if (address.url().host().equals(this.route().address().url().host())) {    //host一致
       return true; // This connection is a perfect match.
     }
 

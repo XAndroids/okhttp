@@ -59,6 +59,9 @@ public final class CacheStrategy {
     this.cacheResponse = cacheResponse;
   }
 
+  //缓存响应码为：200，203，204，300，301，404，405，410，414，501，308才进行缓存
+  //缓存响应码为：302，307同时存在响应头：Expires或者Cache-Control包含max-age，private，public其中的一个
+  //同时请求头和缓存响应头不包含Cache-Control:no-store
   /** Returns true if {@code response} can be stored to later serve another request. */
   public static boolean isCacheable(Response response, Request request) {
     // Always go to network for uncacheable response codes (RFC 7231 section 6.1),
@@ -171,7 +174,7 @@ public final class CacheStrategy {
      */
     public CacheStrategy get() {
       CacheStrategy candidate = getCandidate();
-
+      //如果可以使用缓存，那networkRequest必定为null；指定了只使用缓存但是networkRequest不为null，与用户请求头冲突
       if (candidate.networkRequest != null && request.cacheControl().onlyIfCached()) {
         // We're forbidden from using the network and the cache is insufficient.
         return new CacheStrategy(null, null);
@@ -183,56 +186,57 @@ public final class CacheStrategy {
     /** Returns a strategy to use assuming the request can use the network. */
     private CacheStrategy getCandidate() {
       // No cached response.
-      if (cacheResponse == null) {
+      if (cacheResponse == null) {    //如果没有缓存，进行网络请求
         return new CacheStrategy(request, null);
       }
 
       // Drop the cached response if it's missing a required handshake.
-      if (request.isHttps() && cacheResponse.handshake() == null) {
+      if (request.isHttps() && cacheResponse.handshake() == null) {    //如果是https请求，但是没有握手信息，则发起请求
         return new CacheStrategy(request, null);
       }
 
       // If this response shouldn't have been stored, it should never be used
       // as a response source. This check should be redundant as long as the
       // persistence store is well-behaved and the rules are constant.
-      if (!isCacheable(cacheResponse, request)) {
+      if (!isCacheable(cacheResponse, request)) {    //通过响应码以及头部缓存控制字段判断响应能不能缓存，不能缓存就进行网络请求
         return new CacheStrategy(request, null);
       }
 
-      CacheControl requestCaching = request.cacheControl();
+      CacheControl requestCaching = request.cacheControl();    //请求头中没有设置Cache-Control:no-cache或者If-Modified-Since或者If-None-Match
       if (requestCaching.noCache() || hasConditions(request)) {
         return new CacheStrategy(request, null);
       }
 
       CacheControl responseCaching = cacheResponse.cacheControl();
-      if (responseCaching.immutable()) {
+      if (responseCaching.immutable()) {    //如果缓存响应窜在Cache-Control:immutable响应内容一直不会变，可以使用缓存
         return new CacheStrategy(null, cacheResponse);
       }
 
-      long ageMillis = cacheResponseAge();
-      long freshMillis = computeFreshnessLifetime();
+      //缓存的有效性判断
+      long ageMillis = cacheResponseAge();    //响应多久
+      long freshMillis = computeFreshnessLifetime();    //缓存还能活多久
 
       if (requestCaching.maxAgeSeconds() != -1) {
-        freshMillis = Math.min(freshMillis, SECONDS.toMillis(requestCaching.maxAgeSeconds()));
+        freshMillis = Math.min(freshMillis, SECONDS.toMillis(requestCaching.maxAgeSeconds()));    //缓存最大新鲜度（有效时间）
       }
 
       long minFreshMillis = 0;
       if (requestCaching.minFreshSeconds() != -1) {
-        minFreshMillis = SECONDS.toMillis(requestCaching.minFreshSeconds());
+        minFreshMillis = SECONDS.toMillis(requestCaching.minFreshSeconds());    //缓存最小新鲜度
       }
 
       long maxStaleMillis = 0;
       if (!responseCaching.mustRevalidate() && requestCaching.maxStaleSeconds() != -1) {
-        maxStaleMillis = SECONDS.toMillis(requestCaching.maxStaleSeconds());
+        maxStaleMillis = SECONDS.toMillis(requestCaching.maxStaleSeconds());    //缓存过期后仍有效时长
       }
 
       if (!responseCaching.noCache() && ageMillis + minFreshMillis < freshMillis + maxStaleMillis) {
         Response.Builder builder = cacheResponse.newBuilder();
-        if (ageMillis + minFreshMillis >= freshMillis) {
+        if (ageMillis + minFreshMillis >= freshMillis) {    //如果已过期，但未超过 过期后继续使用时长，那还可以继续使用，只添加相应头部字段
           builder.addHeader("Warning", "110 HttpURLConnection \"Response is stale\"");
         }
         long oneDayMillis = 24 * 60 * 60 * 1000L;
-        if (ageMillis > oneDayMillis && isFreshnessLifetimeHeuristic()) {
+        if (ageMillis > oneDayMillis && isFreshnessLifetimeHeuristic()) {    //如果缓存超过一天并且响应中没有设置过期时间也需要添加警告
           builder.addHeader("Warning", "113 HttpURLConnection \"Heuristic expiration\"");
         }
         return new CacheStrategy(null, builder.build());
@@ -268,6 +272,7 @@ public final class CacheStrategy {
      * Returns the number of milliseconds that the response was fresh for, starting from the served
      * date.
      */
+    //计算缓存有效的时间
     private long computeFreshnessLifetime() {
       CacheControl responseCaching = cacheResponse.cacheControl();
       if (responseCaching.maxAgeSeconds() != -1) {
@@ -297,6 +302,7 @@ public final class CacheStrategy {
      * Returns the current age of the response, in milliseconds. The calculation is specified by RFC
      * 7234, 4.2.3 Calculating Age.
      */
+    //计算响应大概需要多长时间
     private long cacheResponseAge() {
       long apparentReceivedAge = servedDate != null
           ? Math.max(0, receivedResponseMillis - servedDate.getTime())

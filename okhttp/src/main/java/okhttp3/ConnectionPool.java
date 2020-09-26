@@ -47,6 +47,7 @@ public final class ConnectionPool {
    * thread running per connection pool. The thread pool executor permits the pool itself to be
    * garbage collected.
    */
+  //无限容量线程池，后台线程用于清除过期的链接。每个连接池最多只有一个线程在运行。线程池执行器允许池本身被垃圾回收
   private static final Executor executor = new ThreadPoolExecutor(0 /* corePoolSize */,
       Integer.MAX_VALUE /* maximumPoolSize */, 60L /* keepAliveTime */, TimeUnit.SECONDS,
       new SynchronousQueue<Runnable>(), Util.threadFactory("OkHttp ConnectionPool", true));
@@ -57,7 +58,7 @@ public final class ConnectionPool {
   private final Runnable cleanupRunnable = new Runnable() {
     @Override public void run() {
       while (true) {
-        long waitNanos = cleanup(System.nanoTime());
+        long waitNanos = cleanup(System.nanoTime());    //最快多久后需要清理
         if (waitNanos == -1) return;
         if (waitNanos > 0) {
           long waitMillis = waitNanos / 1000000L;
@@ -83,7 +84,7 @@ public final class ConnectionPool {
    * this pool holds up to 5 idle connections which will be evicted after 5 minutes of inactivity.
    */
   public ConnectionPool() {
-    this(5, 5, TimeUnit.MINUTES);
+    this(5, 5, TimeUnit.MINUTES);    //最多保存5个处于空闲状态的连接，连接默认保活5分钟
   }
 
   public ConnectionPool(int maxIdleConnections, long keepAliveDuration, TimeUnit timeUnit) {
@@ -119,12 +120,13 @@ public final class ConnectionPool {
    * Returns a recycled connection to {@code address}, or null if no such connection exists. The
    * route is null if the address has not yet been routed.
    */
+  //获取连接池连接
   @Nullable RealConnection get(Address address, StreamAllocation streamAllocation, Route route) {
     assert (Thread.holdsLock(this));
     for (RealConnection connection : connections) {
-      if (connection.isEligible(address, route)) {
+      if (connection.isEligible(address, route)) {    //要拿到的连接与连接池的连接，连接的配置（dns/代理/域名等）一致，就可以复用
         streamAllocation.acquire(connection, true);
-        return connection;
+        return connection;    //返回连接进行复用
       }
     }
     return null;
@@ -146,13 +148,14 @@ public final class ConnectionPool {
     return null;
   }
 
+  //保存连接以复用
   void put(RealConnection connection) {
     assert (Thread.holdsLock(this));
-    if (!cleanupRunning) {
+    if (!cleanupRunning) {    //如果没有执行清理线程，则执行清理线程
       cleanupRunning = true;
       executor.execute(cleanupRunnable);
     }
-    connections.add(connection);
+    connections.add(connection);    //将新连接加入队列
   }
 
   /**
@@ -207,22 +210,23 @@ public final class ConnectionPool {
       for (Iterator<RealConnection> i = connections.iterator(); i.hasNext(); ) {
         RealConnection connection = i.next();
 
-        // If the connection is in use, keep searching.
+        // If the connection is in use, keep searching.    //检查连接池是否正在被使用
         if (pruneAndGetAllocationCount(connection, now) > 0) {
           inUseConnectionCount++;
           continue;
         }
 
-        idleConnectionCount++;
+        idleConnectionCount++;    //否则记录闲置连接池数量
 
         // If the connection is ready to be evicted, we're done.
-        long idleDurationNs = now - connection.idleAtNanos;
+        long idleDurationNs = now - connection.idleAtNanos;    //获得这个连接池闲置了多久
         if (idleDurationNs > longestIdleDurationNs) {
           longestIdleDurationNs = idleDurationNs;
           longestIdleConnection = connection;
         }
       }
 
+      //最长限制时间超过5分钟， 连接池数量超过5个，马上移除，然后返回0，表示不等待，马上再次验证
       if (longestIdleDurationNs >= this.keepAliveDurationNs
           || idleConnectionCount > this.maxIdleConnections) {
         // We've found a connection to evict. Remove it from the list, then close it below (outside
@@ -230,10 +234,10 @@ public final class ConnectionPool {
         connections.remove(longestIdleConnection);
       } else if (idleConnectionCount > 0) {
         // A connection will be ready to evict soon.
-        return keepAliveDurationNs - longestIdleDurationNs;
+        return keepAliveDurationNs - longestIdleDurationNs;    //池内存在闲置链接，就等待保活时间（5分钟）-最长闲置时间 = 还等闲置多久再检查
       } else if (inUseConnectionCount > 0) {
         // All connections are in use. It'll be at least the keep alive duration 'til we run again.
-        return keepAliveDurationNs;
+        return keepAliveDurationNs;    //有使用中的连接，就等5分钟来检查
       } else {
         // No connections, idle or in use.
         cleanupRunning = false;
@@ -241,10 +245,10 @@ public final class ConnectionPool {
       }
     }
 
-    closeQuietly(longestIdleConnection.socket());
+    closeQuietly(longestIdleConnection.socket());    //关闭移除的Socket连接
 
     // Cleanup again immediately.
-    return 0;
+    return 0;    //返回0，表示不等待，马上再次检测
   }
 
   /**

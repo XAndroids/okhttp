@@ -33,8 +33,9 @@ import static okhttp3.internal.Util.checkDuration;
  * A concrete interceptor chain that carries the entire interceptor chain: all application
  * interceptors, the OkHttp core, all network interceptors, and finally the network caller.
  */
+//一个具体的拦截器链，它携带整个拦截器链：所有应用拦截器，OkHttp核心，所有网络拦截器，最后是网络调用者
 public final class RealInterceptorChain implements Interceptor.Chain {
-  private final List<Interceptor> interceptors;
+  private final List<Interceptor> interceptors;   //通过拦截器集合维护责任链，和责任链的next引用实现方式不同
   private final StreamAllocation streamAllocation;
   private final HttpCodec httpCodec;
   private final RealConnection connection;
@@ -141,9 +142,9 @@ public final class RealInterceptorChain implements Interceptor.Chain {
 
     // Call the next interceptor in the chain.
     RealInterceptorChain next = new RealInterceptorChain(interceptors, streamAllocation, httpCodec,
-        connection, index + 1, request, call, eventListener, connectTimeout, readTimeout,
+        connection, index + 1, request, call, eventListener, connectTimeout, readTimeout,    //构造index+1，执行下一个拦截器
         writeTimeout);
-    Interceptor interceptor = interceptors.get(index);
+    Interceptor interceptor = interceptors.get(index);    //从index=0从第0个拦截器，开始执行责任链上拦截器
     Response response = interceptor.intercept(next);
 
     // Confirm that the next interceptor made its required call to chain.proceed().

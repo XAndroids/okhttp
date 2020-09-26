@@ -52,10 +52,11 @@ public final class CacheInterceptor implements Interceptor {
   @Override public Response intercept(Chain chain) throws IOException {
     Response cacheCandidate = cache != null
         ? cache.get(chain.request())
-        : null;
+        : null;    //通过url的md5数据，从文件缓存查找（Get请求才有缓存）
 
     long now = System.currentTimeMillis();
 
+    //根据各种条件（请求头）组成请求与缓存
     CacheStrategy strategy = new CacheStrategy.Factory(now, chain.request(), cacheCandidate).get();
     Request networkRequest = strategy.networkRequest;
     Response cacheResponse = strategy.cacheResponse;
@@ -68,6 +69,7 @@ public final class CacheInterceptor implements Interceptor {
       closeQuietly(cacheCandidate.body()); // The cache candidate wasn't applicable. Close it.
     }
 
+    //没有网络请求，也没有缓存，直接返回错误
     // If we're forbidden from using the network and the cache is insufficient, fail.
     if (networkRequest == null && cacheResponse == null) {
       return new Response.Builder()
@@ -81,6 +83,7 @@ public final class CacheInterceptor implements Interceptor {
           .build();
     }
 
+    //没有网络请求，则使用缓存
     // If we don't need the network, we're done.
     if (networkRequest == null) {
       return cacheResponse.newBuilder()
@@ -88,9 +91,10 @@ public final class CacheInterceptor implements Interceptor {
           .build();
     }
 
+    //去发起请求
     Response networkResponse = null;
     try {
-      networkResponse = chain.proceed(networkRequest);
+      networkResponse = chain.proceed(networkRequest);   //调用责任链发起网络请求
     } finally {
       // If we're crashing on I/O or otherwise, don't leak the cache body.
       if (networkResponse == null && cacheCandidate != null) {
@@ -125,6 +129,7 @@ public final class CacheInterceptor implements Interceptor {
         .networkResponse(stripBody(networkResponse))
         .build();
 
+    //缓存请求响应结果
     if (cache != null) {
       if (HttpHeaders.hasBody(response) && CacheStrategy.isCacheable(response, networkRequest)) {
         // Offer this request to the cache.

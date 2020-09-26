@@ -223,7 +223,7 @@ public final class StreamAllocation {
         List<Route> routes = routeSelection.getAll();
         for (int i = 0, size = routes.size(); i < size; i++) {
           Route route = routes.get(i);
-          Internal.instance.get(connectionPool, address, this, route);
+          Internal.instance.get(connectionPool, address, this, route);    //从连接池获取连接
           if (connection != null) {
             foundPooledConnection = true;
             result = connection;
@@ -242,7 +242,7 @@ public final class StreamAllocation {
         // for an asynchronous cancel() to interrupt the handshake we're about to do.
         route = selectedRoute;
         refusedStreamCount = 0;
-        result = new RealConnection(connectionPool, selectedRoute);
+        result = new RealConnection(connectionPool, selectedRoute);    //如果没有可用连接词，则新建连接
         acquire(result, false);
       }
     }
@@ -263,7 +263,7 @@ public final class StreamAllocation {
       reportedAcquired = true;
 
       // Pool the connection.
-      Internal.instance.put(connectionPool, result);
+      Internal.instance.put(connectionPool, result);    //新建连接，放入连接池
 
       // If another multiplexed connection to the same address was created concurrently, then
       // release this connection and acquire that one.

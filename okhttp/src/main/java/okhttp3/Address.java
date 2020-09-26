@@ -172,6 +172,7 @@ public final class Address {
     return result;
   }
 
+  //dns、端口、代理、证书等需要一致
   boolean equalsNonHost(Address that) {
     return this.dns.equals(that.dns)
         && this.proxyAuthenticator.equals(that.proxyAuthenticator)

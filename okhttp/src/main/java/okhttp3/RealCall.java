@@ -182,20 +182,20 @@ final class RealCall implements Call {
 
   Response getResponseWithInterceptorChain() throws IOException {
     // Build a full stack of interceptors.
-    List<Interceptor> interceptors = new ArrayList<>();
-    interceptors.addAll(client.interceptors());
-    interceptors.add(retryAndFollowUpInterceptor);
-    interceptors.add(new BridgeInterceptor(client.cookieJar()));
-    interceptors.add(new CacheInterceptor(client.internalCache()));
-    interceptors.add(new ConnectInterceptor(client));
+    List<Interceptor> interceptors = new ArrayList<>();    //将自定义拦截器和五大核心拦截器创建拦截器集合
+    interceptors.addAll(client.interceptors());    //client设置的自定义拦截器
+    interceptors.add(retryAndFollowUpInterceptor);    //重试与重定向拦截器
+    interceptors.add(new BridgeInterceptor(client.cookieJar()));    //桥接拦截器
+    interceptors.add(new CacheInterceptor(client.internalCache()));    //缓存拦截器
+    interceptors.add(new ConnectInterceptor(client));    //连接拦截器
     if (!forWebSocket) {
-      interceptors.addAll(client.networkInterceptors());
+      interceptors.addAll(client.networkInterceptors());    //client设置自定义拦截器
     }
-    interceptors.add(new CallServerInterceptor(forWebSocket));
+    interceptors.add(new CallServerInterceptor(forWebSocket));    //请求服务拦截器
 
     Interceptor.Chain chain = new RealInterceptorChain(interceptors, null, null, null, 0,
         originalRequest, this, eventListener, client.connectTimeoutMillis(),
-        client.readTimeoutMillis(), client.writeTimeoutMillis());
+        client.readTimeoutMillis(), client.writeTimeoutMillis());    //创建拦截器链
 
     return chain.proceed(originalRequest);
   }
